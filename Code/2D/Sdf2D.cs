@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Sandbox.Sdf;
 
@@ -93,6 +95,13 @@ public static class Sdf2DExtensions
 		where T : ISdf2D
 	{
 		return new ExpandedSdf2D<T>( sdf, margin );
+	}
+
+	public static BiasedSdf2D<T, TBias> Bias<T, TBias>( this T sdf, TBias biasSdf, float biasScale = 1f )
+		where T : ISdf2D
+		where TBias : ISdf2D
+	{
+		return new BiasedSdf2D<T, TBias>( sdf, biasSdf, biasScale );
 	}
 }
 
@@ -232,6 +241,51 @@ public record struct LineSdf( Vector2 PointA, Vector2 PointB, float Radius, Vect
 	public static LineSdf ReadRaw( ref ByteStream reader, IReadOnlyDictionary<int, SdfReader<ISdf2D>> sdfTypes )
 	{
 		return new LineSdf(
+			reader.Read<Vector2>(),
+			reader.Read<Vector2>(),
+			reader.Read<float>() );
+	}
+}
+
+public record struct TriangleSdf( Vector2 PointA, Vector2 PointB, Vector2 PointC, float Radius = 0f ) : ISdf2D
+{
+	public Rect Bounds => new Rect( PointA ).AddPoint( PointB ).AddPoint( PointC ).Grow( Radius );
+
+	public float this[ Vector2 pos ]
+	{
+		get
+		{
+			// From https://www.shadertoy.com/view/XsXSz4
+
+			Vector2 e0 = PointB - PointA, v0 = pos - PointA;
+			var d0 = ( v0 - e0 * Math.Clamp( Vector2.Dot( v0, e0 ) / e0.LengthSquared, 0.0, 1.0 ) ).LengthSquared;
+			Vector2 e1 = PointC - PointB, v1 = pos - PointB;
+			var d1 = ( v1 - e1 * Math.Clamp( Vector2.Dot( v1, e1 ) / e1.LengthSquared, 0.0, 1.0 ) ).LengthSquared;
+			Vector2 e2 = PointA - PointC, v2 = pos - PointC;
+			var d2 = ( v2 - e2 * Math.Clamp( Vector2.Dot( v2, e2 ) / e2.LengthSquared, 0.0, 1.0 ) ).LengthSquared;
+
+			var o = e0.x * e2.y - e0.y * e2.x;
+			var d = Vector2.Min( Vector2.Min(
+					new Vector2( d0, o * (v0.x * e0.y - v0.y * e0.x) ),
+					new Vector2( d1, o * (v1.x * e1.y - v1.y * e1.x) ) ),
+				new Vector2( d2, o * (v2.x * e2.y - v2.y * e2.x) ) );
+
+			return -MathF.Sqrt( d.x ) * Math.Sign( d.y ) - Radius;
+		}
+	}
+
+	public void WriteRaw( ref ByteStream writer, Dictionary<TypeDescription, int> sdfTypes )
+	{
+		writer.Write( PointA );
+		writer.Write( PointB );
+		writer.Write( PointC );
+		writer.Write( Radius );
+	}
+
+	public static TriangleSdf ReadRaw( ref ByteStream reader, IReadOnlyDictionary<int, SdfReader<ISdf2D>> sdfTypes )
+	{
+		return new TriangleSdf(
+			reader.Read<Vector2>(),
 			reader.Read<Vector2>(),
 			reader.Read<Vector2>(),
 			reader.Read<float>() );
@@ -485,5 +539,28 @@ public record struct ExpandedSdf2D<T>( T Sdf, float Margin ) : ISdf2D
 		return new ExpandedSdf2D<T>(
 			(T) ISdf2D.Read( ref reader, sdfTypes ),
 			reader.Read<float>() );
+	}
+}
+
+public record struct BiasedSdf2D<T, TBias>( T Sdf, TBias BiasSdf, float BiasScale ) : ISdf2D
+	where T : ISdf2D
+	where TBias : ISdf2D
+{
+	/// <inheritdoc />
+	public Rect Bounds => Sdf.Bounds;
+
+	/// <inheritdoc />
+	public float this[Vector2 pos] => Sdf[pos] + BiasSdf[pos] * BiasScale;
+
+	public void WriteRaw( ref ByteStream writer, Dictionary<TypeDescription, int> sdfTypes )
+	{
+		Sdf.Write( ref writer, sdfTypes );
+		BiasSdf.Write( ref writer, sdfTypes );
+		writer.Write( BiasScale );
+	}
+
+	public static BiasedSdf2D<T, TBias> ReadRaw( ref ByteStream reader, IReadOnlyDictionary<int, SdfReader<ISdf2D>> sdfTypes )
+	{
+		return new BiasedSdf2D<T, TBias>( (T)ISdf2D.Read( ref reader, sdfTypes ), (TBias)ISdf2D.Read( ref reader, sdfTypes ), reader.Read<float>() );
 	}
 }
