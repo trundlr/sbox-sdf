@@ -1,6 +1,26 @@
-﻿obj/
-launchSettings.json
+﻿# Auto-generated code editor files
+.vs/*
+.vscode/*
 *.csproj
-*_c
-.idea
+obj
+bin
+Properties/*
+code/obj/*
+code/Properties/*
+
+# Auto-generated asset related files
+.sbox/*
+*.generated.*
+*.*_c
+!*.shader_c
+*.los
+*.vpk
+*launchSettings.json
 *.sln
+*.slnx
+*_c
+
+*idea
+
+# Exported / standalone games
+Exports/

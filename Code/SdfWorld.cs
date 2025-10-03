@@ -25,11 +25,11 @@ public interface ISdf<T>
 	where T : ISdf<T>
 {
 	// ReSharper disable StaticMemberInGenericType
-#pragma warning disable SB3000
+	#pragma warning disable SB3000
 	internal static List<(TypeDescription Type, SdfReader<T> Reader)> RegisteredTypes { get; } = new();
 	private static bool _sTypesRegistered;
 	// ReSharper enable StaticMemberInGenericType
-#pragma warning restore SB3000
+	#pragma warning restore SB3000
 
 	internal static void EnsureTypesRegistered()
 	{
@@ -93,8 +93,8 @@ internal interface ISdfWorld
 	int ModificationCount { get; }
 	int Dimensions { get; }
 
-	int Write( ref ByteStream msg, int prevModifications );
-	bool Read( ref ByteStream msg );
+	int NetWrite( ref ByteStream msg, int prevModifications );
+	bool NetRead( ref ByteStream msg );
 }
 
 public enum Operator
@@ -120,7 +120,7 @@ public record struct ChunkModification<TSdf>( TSdf Sdf, Operator Operator )
 /// <typeparam name="TChunkKey">Integer coordinates used to index a chunk</typeparam>
 /// <typeparam name="TArray">Type of <see cref="SdfArray{TSdf}"/> used to contain samples</typeparam>
 /// <typeparam name="TSdf">Interface for SDF shapes used to make modifications</typeparam>
-public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf> : Component, Component.ExecuteInEditor, ISdfWorld
+public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf> : Component.ExecuteInEditor, ISdfWorld
 	where TWorld : SdfWorld<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf>
 	where TChunk : SdfChunk<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf>, new()
 	where TResource : SdfResource<TResource>
@@ -237,12 +237,12 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		}
 	}
 
-	public void Write( Stream stream )
+	public void Write( ref Stream stream )
 	{
 		throw new NotImplementedException();
 	}
 
-	public void Read( Stream stream )
+	public void Read( ref Stream stream )
 	{
 		throw new NotImplementedException();
 	}
@@ -250,13 +250,13 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 	private const int MaxModificationsPerMessage = 256;
 
 	// ReSharper disable StaticMemberInGenericType
-#pragma warning disable SB3000
-	private static readonly Dictionary<TypeDescription, int> NetWrite_TypeIndices = new();
-	private static readonly Dictionary<int, SdfReader<TSdf>> NetRead_TypeReaders = new();
+	#pragma warning disable SB3000
+	private static readonly Dictionary<TypeDescription, int> Write_TypeIndices = new();
+	private static readonly Dictionary<int, SdfReader<TSdf>> Read_TypeReaders = new();
 	// ReSharper enable StaticMemberInGenericType
-#pragma warning restore SB3000
+	#pragma warning restore SB3000
 
-	public int Write( ref ByteStream msg, int prevModifications )
+	public int NetWrite( ref ByteStream msg, int prevModifications )
 	{
 		var count = Math.Min( MaxModificationsPerMessage, ModificationCount - prevModifications );
 
@@ -265,7 +265,7 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		msg.Write( count );
 		msg.Write( ModificationCount );
 
-		WriteRange( ref msg, prevModifications, count, NetWrite_TypeIndices );
+		WriteRange( ref msg, prevModifications, count, Write_TypeIndices );
 
 		return count;
 	}
@@ -282,7 +282,7 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		}
 	}
 
-	public bool Read( ref ByteStream msg )
+	public bool NetRead( ref ByteStream msg )
 	{
 		var clearCount = msg.Read<int>();
 		var prevCount = msg.Read<int>();
@@ -312,15 +312,15 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 
 		ISdf<TSdf>.EnsureTypesRegistered();
 
-		NetRead_TypeReaders.Clear();
+		Read_TypeReaders.Clear();
 
 		var index = 0;
 		foreach ( var (_, reader) in ISdf<TSdf>.RegisteredTypes )
 		{
-			NetRead_TypeReaders[index++] = reader;
+			Read_TypeReaders[index++] = reader;
 		}
 
-		ReadRange( ref msg, msgCount, NetRead_TypeReaders );
+		ReadRange( ref msg, msgCount, Read_TypeReaders );
 
 		return true;
 	}
@@ -355,12 +355,6 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		_receivingModifications = true;
 
 		return new DisposeAction( () => _receivingModifications = false );
-	}
-
-	[Obsolete( $"Please use {nameof(ClearAsync)}" )]
-	public void Clear()
-	{
-		_ = ClearAsync();
 	}
 
 	/// <summary>
@@ -410,12 +404,6 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 			await x.ClearAsync( false );
 			UpdatedChunkQueue.Enqueue( x );
 		} ) );
-	}
-
-	[Obsolete( $"Please use {nameof(ClearAsync)}" )]
-	public void Clear( TResource resource )
-	{
-		_ = ClearAsync( resource );
 	}
 
 	/// <summary>
@@ -515,14 +503,6 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		}
 	}
 
-	[Obsolete( $"Please use {nameof(AddAsync)}" )]
-	public bool Add<T>( in T sdf, TResource resource )
-		where T : TSdf
-	{
-		_ = AddAsync( in sdf, resource );
-		return false;
-	}
-
 	/// <summary>
 	/// Add a shape to the given layer or volume.
 	/// </summary>
@@ -540,14 +520,6 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		return ModifyChunksAsync( sdf, resource, true, ( chunk, sdf ) => chunk.AddAsync( sdf ) );
 	}
 
-	[Obsolete( $"Please use {nameof(SubtractAsync)}" )]
-	public bool Subtract<T>( in T sdf, TResource resource )
-		where T : TSdf
-	{
-		_ = SubtractAsync( in sdf, resource );
-		return false;
-	}
-
 	/// <summary>
 	/// Subtract a shape from the given layer or volume.
 	/// </summary>
@@ -563,14 +535,6 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		Modifications.Add( new Modification<TResource, TSdf>( sdf, resource, Operator.Subtract ) );
 
 		return ModifyChunksAsync( sdf, resource, false, ( chunk, sdf ) => chunk.SubtractAsync( sdf ) );
-	}
-
-	[Obsolete( $"Please use {nameof(SubtractAsync)}" )]
-	public bool Subtract<T>( in T sdf )
-		where T : TSdf
-	{
-		_ = SubtractAsync( sdf );
-		return false;
 	}
 
 	/// <summary>

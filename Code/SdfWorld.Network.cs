@@ -23,7 +23,7 @@ public partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf
 		state = state with { lastMessage = 0f };
 
 		var byteStream = ByteStream.Create( 512 );
-		var count = Write( ref byteStream, state.modificationCount );
+		var count = NetWrite( ref byteStream, state.modificationCount );
 
 		ConnectionStates[conn] = state with { modificationCount = state.modificationCount + count };
 
@@ -58,7 +58,7 @@ public partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TArray, TSdf
 	private void Rpc_SendModifications( byte[] bytes )
 	{
 		var byteStream = ByteStream.CreateReader( bytes );
-		if ( Read( ref byteStream ) )
+		if ( NetRead( ref byteStream ) )
 		{
 			_notifiedMissingModifications = float.PositiveInfinity;
 			return;

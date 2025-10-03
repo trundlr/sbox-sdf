@@ -30,10 +30,10 @@ public class TextureReference<T>
 public abstract class SdfResource<T> : GameResource
 	where T : SdfResource<T>
 {
-#pragma warning disable SB3000
+	#pragma warning disable SB3000
 	// ReSharper disable once StaticMemberInGenericType
-	private static char[] SplitChars { get; } = { ' ' };
-#pragma warning restore SB3000
+	private static char[] SplitChars { get; } = [' '];
+	#pragma warning restore SB3000
 
 	/// <summary>
 	/// If true, this layer or volume is only used as a texture source by other layers or volumes.
@@ -56,8 +56,8 @@ public abstract class SdfResource<T> : GameResource
 	[Hide]
 	[JsonIgnore]
 	public string[] SplitCollisionTags => IsTextureSourceOnly
-		? Array.Empty<string>()
-		: CollisionTags?.Split( SplitChars, StringSplitOptions.RemoveEmptyEntries ) ?? Array.Empty<string>();
+		? []
+		: CollisionTags?.Split( SplitChars, StringSplitOptions.RemoveEmptyEntries ) ?? [];
 
 	/// <summary>
 	/// If true, this resource will have a collision mesh. True if <see cref="CollisionTags"/> has any items
